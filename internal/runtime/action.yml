@@ -1,0 +1,45 @@
+name: Setup Bun runtime
+description: Internal runtime action for setup-bun. Do not use directly.
+inputs:
+  bun-version:
+    description: Bun version to install.
+    required: false
+  bun-version-file:
+    description: File used to resolve the Bun version.
+    required: false
+    default: null
+  bun-download-url:
+    description: Explicit Bun download URL.
+    required: false
+  registries:
+    description: Registry configuration.
+    required: false
+  registry-url:
+    description: Deprecated registry URL input.
+    required: false
+  scope:
+    description: Deprecated scope input.
+    required: false
+  no-cache:
+    description: Disable caching of Bun executable.
+    required: false
+    default: false
+  token:
+    description: Token used to resolve Bun versions.
+    required: false
+outputs:
+  bun-version:
+    description: Installed Bun version.
+  bun-revision:
+    description: Installed Bun revision.
+  bun-path:
+    description: Installed Bun path.
+  bun-download-url:
+    description: Download URL used for Bun.
+  cache-hit:
+    description: Whether Bun came from cache.
+runs:
+  using: node24
+  main: ../../dist/setup/index.js
+  post: ../../dist/cache-save/index.js
+  post-if: success()
