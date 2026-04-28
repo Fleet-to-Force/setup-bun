@@ -1,5 +1,5 @@
 name: Setup Bun
-description: Download, install, and setup Bun to your path.
+description: Canonical Bun lane bootstrapper for Fleet-to-Force control planes.
 author: robobun
 
 branding:
@@ -18,46 +18,121 @@ inputs:
     description: Override the URL to download Bun from. This skips version resolution and verifying AVX2 support.
     required: false
   registries:
-    description: |
-      List of package registries with authentication support. Format:
-      - Default registry: https://registry.npmjs.org/
-      - Default with token: https://registry.npmjs.org/|token
-      - Scoped registry: @scope:https://registry.example.com/
-      - Scoped with token: @scope:https://registry.example.com/|token
-      - Scoped with credentials: @scope:https://user:pass@registry.example.com/
+    description: Registry configuration to use while setting up Bun.
     required: false
   registry-url:
     required: false
-    description: The URL of the package registry to use for installing Bun. Set the $BUN_AUTH_TOKEN environment variable to authenticate with the registry.
-    deprecationMessage: "Use 'registries' input instead."
+    description: Deprecated registry URL input.
   scope:
     required: false
-    description: "The scope for authenticating with the package registry."
-    deprecationMessage: "Use 'registries' input instead."
+    description: Deprecated registry scope input.
   no-cache:
     required: false
-    type: boolean
     default: false
     description: Disable caching of bun executable.
   token:
     required: false
-    default: ${{ github.server_url == 'https://github.com' && github.token || '' }}
-    description: Personal access token (PAT) used to fetch tags from oven-sh/bun repository. Recommended for resolving wildcard/range versions to avoid GitHub API rate limiting. When running this action on github.com, the default value is sufficient. When running on GHES, you can pass a personal access token for github.com if you are experiencing rate limiting.
+    description: Personal access token used to resolve Bun versions.
+  write-summary:
+    required: false
+    default: "true"
+    description: Whether to append a summary of the installed Bun tool state.
 
 outputs:
   bun-version:
     description: The version of Bun that was installed.
+    value: ${{ steps.finalize.outputs.bun-version }}
   bun-revision:
     description: The revision of Bun that was installed.
+    value: ${{ steps.finalize.outputs.bun-revision }}
   bun-path:
     description: The path to the Bun executable.
+    value: ${{ steps.finalize.outputs.bun-path }}
   bun-download-url:
     description: The URL from which Bun was downloaded.
+    value: ${{ steps.finalize.outputs.bun-download-url }}
   cache-hit:
     description: If the version of Bun was cached.
+    value: ${{ steps.finalize.outputs.cache-hit }}
+  tool-path:
+    description: Canonical alias for the Bun executable path.
+    value: ${{ steps.finalize.outputs.tool-path }}
+  tool-version:
+    description: Canonical alias for the Bun version.
+    value: ${{ steps.finalize.outputs.tool-version }}
+  tool-revision:
+    description: Canonical alias for the Bun revision.
+    value: ${{ steps.finalize.outputs.tool-revision }}
+  download-url:
+    description: Canonical alias for the Bun download URL.
+    value: ${{ steps.finalize.outputs.download-url }}
+  manifest-path:
+    description: Path to the generated setup manifest JSON.
+    value: ${{ steps.finalize.outputs.manifest-path }}
 
 runs:
-  using: "node24"
-  main: "dist/setup/index.js"
-  post: "dist/cache-save/index.js"
-  post-if: success()
+  using: composite
+  steps:
+    - id: runtime
+      uses: ./internal/runtime
+      with:
+        bun-version: ${{ inputs.bun-version }}
+        bun-version-file: ${{ inputs.bun-version-file }}
+        bun-download-url: ${{ inputs.bun-download-url }}
+        registries: ${{ inputs.registries }}
+        registry-url: ${{ inputs.registry-url }}
+        scope: ${{ inputs.scope }}
+        no-cache: ${{ inputs.no-cache }}
+        token: ${{ inputs.token }}
+
+    - id: finalize
+      shell: bash
+      env:
+        BUN_PATH: ${{ steps.runtime.outputs['bun-path'] }}
+        BUN_VERSION: ${{ steps.runtime.outputs['bun-version'] }}
+        BUN_REVISION: ${{ steps.runtime.outputs['bun-revision'] }}
+        BUN_DOWNLOAD_URL: ${{ steps.runtime.outputs['bun-download-url'] }}
+        BUN_CACHE_HIT: ${{ steps.runtime.outputs['cache-hit'] }}
+        WRITE_SUMMARY: ${{ inputs.write-summary }}
+      run: |
+        set -euo pipefail
+        manifest_dir="$RUNNER_TEMP/fleet-to-force/setup-bun"
+        mkdir -p "$manifest_dir"
+        manifest_path="$manifest_dir/manifest.json"
+        python - <<'PY'
+import json, os, pathlib
+manifest = {
+  'tool': 'bun',
+  'path': os.environ.get('BUN_PATH', ''),
+  'version': os.environ.get('BUN_VERSION', ''),
+  'revision': os.environ.get('BUN_REVISION', ''),
+  'download_url': os.environ.get('BUN_DOWNLOAD_URL', ''),
+  'cache_hit': os.environ.get('BUN_CACHE_HIT', '')
+}
+pathlib.Path(os.environ['MANIFEST_PATH']).write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+PY
+        echo "bun-path=$BUN_PATH" >> "$GITHUB_OUTPUT"
+        echo "bun-version=$BUN_VERSION" >> "$GITHUB_OUTPUT"
+        echo "bun-revision=$BUN_REVISION" >> "$GITHUB_OUTPUT"
+        echo "bun-download-url=$BUN_DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
+        echo "cache-hit=$BUN_CACHE_HIT" >> "$GITHUB_OUTPUT"
+        echo "tool-path=$BUN_PATH" >> "$GITHUB_OUTPUT"
+        echo "tool-version=$BUN_VERSION" >> "$GITHUB_OUTPUT"
+        echo "tool-revision=$BUN_REVISION" >> "$GITHUB_OUTPUT"
+        echo "download-url=$BUN_DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
+        echo "manifest-path=$manifest_path" >> "$GITHUB_OUTPUT"
+        if [ "$WRITE_SUMMARY" = "true" ]; then
+          {
+            echo "### setup-bun"
+            echo "- bun-path: \
+$BUN_PATH"
+            echo "- bun-version: $BUN_VERSION"
+            echo "- bun-revision: $BUN_REVISION"
+            echo "- bun-download-url: $BUN_DOWNLOAD_URL"
+            echo "- cache-hit: $BUN_CACHE_HIT"
+            echo "- manifest-path: \
+$manifest_path"
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
+      env:
+        MANIFEST_PATH: ${{ runner.temp }}/fleet-to-force/setup-bun/manifest.json
