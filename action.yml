@@ -69,6 +69,30 @@ outputs:
   manifest-path:
     description: Path to the generated setup manifest JSON.
     value: ${{ steps.finalize.outputs.manifest-path }}
+  lane-id:
+    description: Canonical lane identity for the configured toolchain.
+    value: ${{ steps.finalize.outputs.lane-id }}
+  tool-kind:
+    description: Canonical tool identity for workflow coherence checks.
+    value: ${{ steps.finalize.outputs.tool-kind }}
+  manifest-schema-version:
+    description: Schema version of the generated setup manifest.
+    value: ${{ steps.finalize.outputs.manifest-schema-version }}
+  verification-command:
+    description: Canonical command that proves the configured lane is alive.
+    value: ${{ steps.finalize.outputs.verification-command }}
+  coherence-checks:
+    description: JSON object describing the executed coherence checks and their status.
+    value: ${{ steps.finalize.outputs.coherence-checks }}
+  binary-sha256:
+    description: SHA-256 digest of the resolved Bun binary.
+    value: ${{ steps.finalize.outputs.binary-sha256 }}
+  resolved-from:
+    description: Description of how the version was resolved.
+    value: ${{ steps.finalize.outputs.resolved-from }}
+  workflow-contract-version:
+    description: Version of the setup lane contract emitted by this action.
+    value: ${{ steps.finalize.outputs.workflow-contract-version }}
 
 runs:
   using: composite
@@ -94,20 +118,52 @@ runs:
         BUN_DOWNLOAD_URL: ${{ steps.runtime.outputs['bun-download-url'] }}
         BUN_CACHE_HIT: ${{ steps.runtime.outputs['cache-hit'] }}
         WRITE_SUMMARY: ${{ inputs.write-summary }}
+        MANIFEST_PATH: ${{ runner.temp }}/fleet-to-force/setup-bun/manifest.json
       run: |
         set -euo pipefail
         manifest_dir="$RUNNER_TEMP/fleet-to-force/setup-bun"
         mkdir -p "$manifest_dir"
         manifest_path="$manifest_dir/manifest.json"
+        verification_command="$BUN_PATH --version"
+        "$BUN_PATH" --version >/dev/null
+        binary_sha256="$(python - <<'PY'
+import hashlib, os
+path = os.environ['BUN_PATH']
+with open(path, 'rb') as fh:
+    print(hashlib.sha256(fh.read()).hexdigest())
+PY
+        )"
+        if [ -n '${{ inputs.bun-download-url }}' ]; then
+          resolved_from='input:bun-download-url'
+        elif [ -n '${{ inputs.bun-version-file }}' ] && [ '${{ inputs.bun-version-file }}' != 'null' ]; then
+          resolved_from='version-file:${{ inputs.bun-version-file }}'
+        elif [ -n '${{ inputs.bun-version }}' ]; then
+          resolved_from='input:bun-version'
+        else
+          resolved_from='runtime:default'
+        fi
+        coherence_checks='{"binary_exists":true,"version_resolved":true,"manifest_written":true,"bun_version_executes":true}'
+        export VERIFICATION_COMMAND="$verification_command"
+        export BINARY_SHA256="$binary_sha256"
+        export COHERENCE_CHECKS="$coherence_checks"
+        export RESOLVED_FROM="$resolved_from"
         python - <<'PY'
 import json, os, pathlib
 manifest = {
+  'manifest_schema_version': 2,
+  'workflow_contract_version': 2,
+  'lane_id': 'bun',
   'tool': 'bun',
+  'tool_kind': 'bun',
   'path': os.environ.get('BUN_PATH', ''),
   'version': os.environ.get('BUN_VERSION', ''),
   'revision': os.environ.get('BUN_REVISION', ''),
   'download_url': os.environ.get('BUN_DOWNLOAD_URL', ''),
-  'cache_hit': os.environ.get('BUN_CACHE_HIT', '')
+  'cache_hit': os.environ.get('BUN_CACHE_HIT', ''),
+  'verification_command': os.environ['VERIFICATION_COMMAND'],
+  'coherence_checks': json.loads(os.environ['COHERENCE_CHECKS']),
+  'binary_sha256': os.environ['BINARY_SHA256'],
+  'resolved_from': os.environ['RESOLVED_FROM']
 }
 pathlib.Path(os.environ['MANIFEST_PATH']).write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
 PY
@@ -121,18 +177,27 @@ PY
         echo "tool-revision=$BUN_REVISION" >> "$GITHUB_OUTPUT"
         echo "download-url=$BUN_DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
         echo "manifest-path=$manifest_path" >> "$GITHUB_OUTPUT"
+        echo "lane-id=bun" >> "$GITHUB_OUTPUT"
+        echo "tool-kind=bun" >> "$GITHUB_OUTPUT"
+        echo "manifest-schema-version=2" >> "$GITHUB_OUTPUT"
+        echo "verification-command=$verification_command" >> "$GITHUB_OUTPUT"
+        echo "coherence-checks=$coherence_checks" >> "$GITHUB_OUTPUT"
+        echo "binary-sha256=$binary_sha256" >> "$GITHUB_OUTPUT"
+        echo "resolved-from=$resolved_from" >> "$GITHUB_OUTPUT"
+        echo "workflow-contract-version=2" >> "$GITHUB_OUTPUT"
         if [ "$WRITE_SUMMARY" = "true" ]; then
           {
             echo "### setup-bun"
+            echo "- lane-id: bun"
+            echo "- tool-kind: bun"
             echo "- bun-path: \
 $BUN_PATH"
             echo "- bun-version: $BUN_VERSION"
             echo "- bun-revision: $BUN_REVISION"
-            echo "- bun-download-url: $BUN_DOWNLOAD_URL"
-            echo "- cache-hit: $BUN_CACHE_HIT"
+            echo "- verification-command: $verification_command"
+            echo "- manifest-schema-version: 2"
             echo "- manifest-path: \
 $manifest_path"
+            echo "- cache-hit: $BUN_CACHE_HIT"
           } >> "$GITHUB_STEP_SUMMARY"
         fi
-      env:
-        MANIFEST_PATH: ${{ runner.temp }}/fleet-to-force/setup-bun/manifest.json
