@@ -190,14 +190,12 @@ PY
             echo "### setup-bun"
             echo "- lane-id: bun"
             echo "- tool-kind: bun"
-            echo "- bun-path: \
-$BUN_PATH"
+            echo "- bun-path: $BUN_PATH"
             echo "- bun-version: $BUN_VERSION"
             echo "- bun-revision: $BUN_REVISION"
             echo "- verification-command: $verification_command"
             echo "- manifest-schema-version: 2"
-            echo "- manifest-path: \
-$manifest_path"
+            echo "- manifest-path: $manifest_path"
             echo "- cache-hit: $BUN_CACHE_HIT"
           } >> "$GITHUB_STEP_SUMMARY"
         fi
