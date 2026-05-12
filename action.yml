@@ -141,7 +141,7 @@ runs:
         export BINARY_SHA256="$binary_sha256"
         export COHERENCE_CHECKS="$coherence_checks"
         export RESOLVED_FROM="$resolved_from"
-        python -c 'import json, os, pathlib; manifest = {"manifest_schema_version": 2, "workflow_contract_version": 2, "lane_id": "bun", "tool": "bun", "tool_kind": "bun", "path": os.environ.get("BUN_PATH", ""), "version": os.environ.get("BUN_VERSION", ""), "revision": os.environ.get("BUN_REVISION", ""), "download_url": os.environ.get("BUN_DOWNLOAD_URL", ""), "cache_hit": os.environ.get("BUN_CACHE_HIT", ""), "verification_command": os.environ["VERIFICATION_COMMAND"], "coherence_checks": json.loads(os.environ["COHERENCE_CHECKS"]), "binary_sha256": os.environ["BINARY_SHA256"], "resolved_from": os.environ["RESOLVED_FROM"]}; pathlib.Path(os.environ["MANIFEST_PATH"]).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")'
+        python -c 'import json, os, pathlib; manifest = {"manifest_schema_version": 2, "workflow_contract_version": 2, "lane_id": "node", "tool": "bun", "tool_kind": "bun", "path": os.environ.get("BUN_PATH", ""), "version": os.environ.get("BUN_VERSION", ""), "revision": os.environ.get("BUN_REVISION", ""), "download_url": os.environ.get("BUN_DOWNLOAD_URL", ""), "cache_hit": os.environ.get("BUN_CACHE_HIT", ""), "verification_command": os.environ["VERIFICATION_COMMAND"], "coherence_checks": json.loads(os.environ["COHERENCE_CHECKS"]), "binary_sha256": os.environ["BINARY_SHA256"], "resolved_from": os.environ["RESOLVED_FROM"]}; pathlib.Path(os.environ["MANIFEST_PATH"]).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")'
         echo "bun-path=$BUN_PATH" >> "$GITHUB_OUTPUT"
         echo "bun-version=$BUN_VERSION" >> "$GITHUB_OUTPUT"
         echo "bun-revision=$BUN_REVISION" >> "$GITHUB_OUTPUT"
@@ -152,7 +152,7 @@ runs:
         echo "tool-revision=$BUN_REVISION" >> "$GITHUB_OUTPUT"
         echo "download-url=$BUN_DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
         echo "manifest-path=$manifest_path" >> "$GITHUB_OUTPUT"
-        echo "lane-id=bun" >> "$GITHUB_OUTPUT"
+        echo "lane-id=node" >> "$GITHUB_OUTPUT"
         echo "tool-kind=bun" >> "$GITHUB_OUTPUT"
         echo "manifest-schema-version=2" >> "$GITHUB_OUTPUT"
         echo "verification-command=$verification_command" >> "$GITHUB_OUTPUT"
@@ -163,7 +163,7 @@ runs:
         if [ "$WRITE_SUMMARY" = "true" ]; then
           {
             echo "### setup-bun"
-            echo "- lane-id: bun"
+            echo "- lane-id: node"
             echo "- tool-kind: bun"
             echo "- bun-path: $BUN_PATH"
             echo "- bun-version: $BUN_VERSION"
